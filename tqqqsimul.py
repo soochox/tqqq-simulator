@@ -33,7 +33,6 @@ class TQQQSimulator:
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
 
-
         df.dropna(inplace=True)
 
         # st.subheader("📌 다운로드된 원시 데이터 확인")
@@ -132,7 +131,7 @@ class TQQQSimulator:
         })
 
 if __name__ == '__main__':
-    st.title("📊 TQQQ 전략 시뮬레이터")
+    st.markdown("## 📊 TQQQ 전략 시뮬레이터")
 
     ticker = st.text_input("티커 입력", "TQQQ")
     start_date = st.date_input("시작일", pd.to_datetime("2020-01-01"))
@@ -159,10 +158,10 @@ if __name__ == '__main__':
         st.write(f"총 매수 횟수: {result['총 매수 횟수']} 회")
 
         st.subheader("📋 매수 기록")
-        st.dataframe(result['매수 기록'])
+        st.dataframe(result['매수 기록'], use_container_width=True)
 
         st.subheader("📈 자산 추이 그래프")
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize=(10, 4))
         ax.plot(result['자산 추이']['Date'], result['자산 추이']['Value'], label="평가금액")
         ax.set_xlabel("날짜")
         ax.set_ylabel("평가금액")
@@ -171,7 +170,7 @@ if __name__ == '__main__':
         st.pyplot(fig)
 
         st.subheader("📉 누적 주식 수 그래프")
-        fig2, ax2 = plt.subplots()
+        fig2, ax2 = plt.subplots(figsize=(10, 4))
         ax2.plot(result['누적 주식 수']['Date'], result['누적 주식 수']['Shares'], label="누적 주식 수", color='green')
         ax2.set_xlabel("날짜")
         ax2.set_ylabel("주식 수")
