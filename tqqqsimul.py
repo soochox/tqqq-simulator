@@ -131,7 +131,7 @@ class TQQQSimulator:
         })
 
 if __name__ == '__main__':
-    st.markdown("## 📊 TQQQ 전략 시뮬레이터 기연바보다ㅎ")
+    st.markdown("## 📊 주식 전략 시뮬레이터 기연바보다ㅎ")
 
     ticker = st.text_input("티커 입력", "TQQQ")
     start_date = st.date_input("시작일", pd.to_datetime("2020-01-01"))
