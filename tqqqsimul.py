@@ -11,23 +11,30 @@ matplotlib.rcParams['font.family'] = 'Malgun Gothic'
 matplotlib.rcParams['axes.unicode_minus'] = False
 
 class TQQQSimulator:
-    def __init__(self, ticker="TQQQ", start_date="2020-01-01", end_date="2024-12-31", per_buy_amount=1_000_000, buy_interval=5):
+    def __init__(self, ticker="TQQQ", start_date="2020-01-01", end_date="2024-12-31", per_buy_amount=1_000_000, buy_interval=5, initial_cash=0, signal_ticker="TQQQ", entry_drawdown=20, exit_recovery=10, ):
         self.ticker = ticker
         self.start_date = start_date
         self.end_date = end_date
         self.df = self.download_data()
         self.per_buy_amount = per_buy_amount
         self.buy_interval = buy_interval
-        self.cash = 0
+        self.cash = initial_cash
         self.shares = 0
         self.portfolio = []
         self.daily_value = []
         self.sell_points = []  # 매도 시점 기록
         self.cumulative_shares = []  # 누적 주식 수 기록
+        self.signal_ticker = signal_ticker
+        self.entry_drawdown = entry_drawdown
+        self.exit_recovery = exit_recovery
+        self.signal_df = self.download_data(ticker=signal_ticker)
+        self.signal_max = self.signal_df['Close'].cummax()
         self.compute_indicators()
 
-    def download_data(self):
-        df = yf.download(self.ticker, start=self.start_date, end=self.end_date)
+    def download_data(self, ticker=None):
+        if ticker is None:
+            ticker = self.ticker
+        df = yf.download(ticker, start=self.start_date, end=self.end_date)
         df = df[['Close']].copy()
 
         if isinstance(df.columns, pd.MultiIndex):
@@ -60,6 +67,7 @@ class TQQQSimulator:
         peak_value = 0
         max_drawdown = 0
 
+        in_position = False  # 진입 여부 플래그
         for i in range(len(self.df)):
             row = self.df.iloc[i]
             date, price, rsi, dev, week = row.name, row['Close'], row['RSI'], row['Deviation'], row['Week']
@@ -70,6 +78,20 @@ class TQQQSimulator:
                 # if rsi >= 70 and self.shares > 0:
                 #     self.sell(date, price, 'RSI70이상_10%매도', self.shares * 0.10)
                 #     self.sell_points.append((date, price))
+
+            # 전략 1: 진입 조건 - signal_ticker가 고점대비 X% 하락 (stop_rally 기준 이상 상승 시 진입 금지)
+            signal_price = self.signal_df['Close'].iloc[i]
+            signal_peak = self.signal_max.iloc[i]
+            drawdown = (signal_price - signal_peak) / signal_peak * 100
+            if not in_position and drawdown <= -self.entry_drawdown and signal_price <= signal_peak * (1 + self.exit_recovery / 100):
+                self.buy(date, price, f'진입(DD {drawdown:.2f}%)', self.per_buy_amount)
+                in_position = True
+
+            # 전략 2: 청산 조건 - signal_ticker가 고점대비 X% 회복
+            if in_position and drawdown >= -self.exit_recovery:
+                self.sell(date, price, f'청산(DD {drawdown:.2f}%)', self.shares)
+                self.sell_points.append((date, price))
+                in_position = False
 
             if i % self.buy_interval == 0:
                 self.buy(date, price, '정기매수', self.per_buy_amount)
@@ -111,7 +133,10 @@ class TQQQSimulator:
         }
 
     def buy(self, date, price, action, amount):
+        if amount > self.cash:
+            return  # 현금 부족 시 매수 불가
         quantity = amount / price
+        self.cash -= amount
         self.shares += quantity
         self.portfolio.append({
             'Date': date, 'Price': price,
@@ -131,21 +156,32 @@ class TQQQSimulator:
         })
 
 if __name__ == '__main__':
-    st.markdown("## 📊 주식 전략 시뮬레이터")
+    st.markdown("## 📊 TQQQ 전략 시뮬레이터")
 
     ticker = st.text_input("티커 입력", "TQQQ")
     start_date = st.date_input("시작일", pd.to_datetime("2020-01-01"))
     end_date = st.date_input("종료일", pd.to_datetime("2024-12-31"))
+    initial_cash = st.number_input("최초 투자금 (원)", value=0, step=10000)
+    entry_drawdown = st.number_input("진입 기준: 고점대비 하락률 (%)", min_value=0, max_value=100, value=20, step=1)
+    exit_recovery = st.number_input("청산 기준: 고점대비 회복률 (%)", min_value=0, max_value=100, value=10, step=1)
     per_buy_amount = st.number_input("1회 매수 금액 (원)", value=1000000, step=10000)
     buy_interval = st.number_input("정기 매수 간격 (일)", min_value=1, max_value=30, value=5, step=1)
 
-    if st.button("시뮬레이션 실행"):
+    chart_start = st.date_input("차트 보기 시작일", pd.to_datetime("2023-01-01"))
+    chart_end = st.date_input("차트 보기 종료일", pd.to_datetime("2023-12-31"))
+
+    if exit_recovery <= entry_drawdown:
+        st.error("❗ 청산 기준은 진입 중단 기준보다 커야 합니다. 값을 다시 설정해주세요.")
+    elif st.button("시뮬레이션 실행"):
         sim = TQQQSimulator(
             ticker=ticker,
             start_date=start_date.strftime('%Y-%m-%d'),
             end_date=end_date.strftime('%Y-%m-%d'),
             per_buy_amount=per_buy_amount,
-            buy_interval=buy_interval
+            buy_interval=buy_interval,
+            initial_cash=initial_cash,
+            entry_drawdown=entry_drawdown,
+            exit_recovery=exit_recovery
         )
         result = sim.simulate()
 
@@ -177,3 +213,21 @@ if __name__ == '__main__':
         ax2.set_title("누적 주식 수 추이")
         ax2.legend()
         st.pyplot(fig2)
+
+        st.subheader("📉 입력 기간 차트 보기")
+        chart_df = sim.df[(sim.df.index >= pd.to_datetime(chart_start)) & (sim.df.index <= pd.to_datetime(chart_end))]
+        if not chart_df.empty:
+            fig3, ax3 = plt.subplots(figsize=(10, 4))
+            ax3.plot(chart_df.index, chart_df['Close'], label="종가")
+
+            # 매수 시점 표시
+            buy_df = result['매수 기록']
+            buy_df_in_range = buy_df[(buy_df['Date'] >= pd.to_datetime(chart_start)) & (buy_df['Date'] <= pd.to_datetime(chart_end))]
+            ax3.scatter(buy_df_in_range['Date'], buy_df_in_range['Price'], color='red', marker='^', label='매수 시점')
+            ax3.set_title(f"{ticker} 차트 ({chart_start} ~ {chart_end})")
+            ax3.set_xlabel("날짜")
+            ax3.set_ylabel("가격")
+            ax3.legend()
+            st.pyplot(fig3)
+        else:
+            st.warning("선택한 기간에 데이터가 없습니다.")
