@@ -11,7 +11,7 @@ matplotlib.rcParams['font.family'] = 'Malgun Gothic'
 matplotlib.rcParams['axes.unicode_minus'] = False
 
 class TQQQSimulator:
-    def __init__(self, ticker="TQQQ", start_date="2020-01-01", end_date="2024-12-31", per_buy_amount=1_000_000, buy_interval=5, initial_cash=0, signal_ticker="TQQQ", entry_drawdown=20, exit_recovery=10, ):
+    def __init__(self, ticker="TQQQ", start_date="2020-01-01", end_date="2024-12-31", per_buy_amount=1_000_000, buy_interval=5, initial_cash=0, signal_ticker="TQQQ", entry_drawdown=20, exit_recovery=10, , stop_buy_rally=5):
         self.ticker = ticker
         self.start_date = start_date
         self.end_date = end_date
@@ -28,6 +28,7 @@ class TQQQSimulator:
         self.entry_drawdown = entry_drawdown
         self.exit_recovery = exit_recovery
         self.signal_df = self.download_data(ticker=signal_ticker)
+        self.stop_buy_rally = stop_buy_rally
         self.signal_max = self.signal_df['Close'].cummax()
         self.compute_indicators()
 
@@ -83,7 +84,7 @@ class TQQQSimulator:
             signal_price = self.signal_df['Close'].iloc[i]
             signal_peak = self.signal_max.iloc[i]
             drawdown = (signal_price - signal_peak) / signal_peak * 100
-            if not in_position and drawdown <= -self.entry_drawdown and signal_price <= signal_peak * (1 + self.exit_recovery / 100):
+            if not in_position and drawdown <= -self.entry_drawdown and signal_price <= signal_peak * (1 + self.stop_buy_rally / 100):
                 self.buy(date, price, f'진입(DD {drawdown:.2f}%)', self.per_buy_amount)
                 in_position = True
 
@@ -162,15 +163,18 @@ if __name__ == '__main__':
     start_date = st.date_input("시작일", pd.to_datetime("2020-01-01"))
     end_date = st.date_input("종료일", pd.to_datetime("2024-12-31"))
     initial_cash = st.number_input("최초 투자금 (원)", value=0, step=10000)
-    entry_drawdown = st.number_input("진입 기준: 고점대비 하락률 (%)", min_value=0, max_value=100, value=20, step=1)
-    exit_recovery = st.number_input("청산 기준: 고점대비 회복률 (%)", min_value=0, max_value=100, value=10, step=1)
+    entry_drawdown = st.number_input("고점 대비 하락률 (진입 조건) (%)", min_value=0, max_value=100, value=20, step=1)", min_value=0, max_value=100, value=20, step=1)
+    stop_buy_rally = st.number_input("고점 대비 상승률 (진입 중단 조건) (%)", min_value=0, max_value=100, value=5, step=1)
+    exit_recovery = st.number_input("고점 대비 상승률 (청산 조건) (%)", min_value=0, max_value=100, value=10, step=1)", min_value=0, max_value=100, value=10, step=1)
     per_buy_amount = st.number_input("1회 매수 금액 (원)", value=1000000, step=10000)
     buy_interval = st.number_input("정기 매수 간격 (일)", min_value=1, max_value=30, value=5, step=1)
 
     chart_start = st.date_input("차트 보기 시작일", pd.to_datetime("2023-01-01"))
     chart_end = st.date_input("차트 보기 종료일", pd.to_datetime("2023-12-31"))
 
-    if exit_recovery <= entry_drawdown:
+    if stop_buy_rally >= exit_recovery:
+        st.error("❗ 청산 기준은 매수 중단 기준보다 커야 합니다. 값을 다시 설정해주세요.")
+    elif exit_recovery <= entry_drawdown:
         st.error("❗ 청산 기준은 진입 중단 기준보다 커야 합니다. 값을 다시 설정해주세요.")
     elif st.button("시뮬레이션 실행"):
         sim = TQQQSimulator(
@@ -181,7 +185,8 @@ if __name__ == '__main__':
             buy_interval=buy_interval,
             initial_cash=initial_cash,
             entry_drawdown=entry_drawdown,
-            exit_recovery=exit_recovery
+            exit_recovery=exit_recovery,
+            stop_buy_rally=stop_buy_rally
         )
         result = sim.simulate()
 
