@@ -163,9 +163,9 @@ if __name__ == '__main__':
     start_date = st.date_input("시작일", pd.to_datetime("2020-01-01"))
     end_date = st.date_input("종료일", pd.to_datetime("2024-12-31"))
     initial_cash = st.number_input("최초 투자금 (원)", value=0, step=10000)
-    entry_drawdown = st.number_input("고점 대비 하락률 (진입 조건) (%)", min_value=0, max_value=100, value=20, step=1)", min_value=0, max_value=100, value=20, step=1)
+    entry_drawdown = st.number_input("고점 대비 하락률 (진입 조건) (%)", min_value=0, max_value=100, value=20, step=1)
     stop_buy_rally = st.number_input("고점 대비 상승률 (진입 중단 조건) (%)", min_value=0, max_value=100, value=5, step=1)
-    exit_recovery = st.number_input("고점 대비 상승률 (청산 조건) (%)", min_value=0, max_value=100, value=10, step=1)", min_value=0, max_value=100, value=10, step=1)
+    exit_recovery = st.number_input("고점 대비 상승률 (청산 조건) (%)", min_value=0, max_value=100, value=10, step=1)
     per_buy_amount = st.number_input("1회 매수 금액 (원)", value=1000000, step=10000)
     buy_interval = st.number_input("정기 매수 간격 (일)", min_value=1, max_value=30, value=5, step=1)
 
