@@ -11,7 +11,7 @@ matplotlib.rcParams['font.family'] = 'Malgun Gothic'
 matplotlib.rcParams['axes.unicode_minus'] = False
 
 class TQQQSimulator:
-    def __init__(self, ticker="TQQQ", start_date="2020-01-01", end_date="2024-12-31", per_buy_amount=1_000_000, buy_interval=5, initial_cash=0, signal_ticker="TQQQ", entry_drawdown=20, exit_recovery=10, stop_buy_rally=5):
+    def __init__(self, ticker="TQQQ", start_date="2020-01-01", end_date="2024-12-31", per_buy_amount=1_000_000, buy_interval=5, initial_cash=0, signal_ticker="TQQQ", entry_drawdown=20, exit_recovery=10, , stop_buy_rally=5):
         self.ticker = ticker
         self.start_date = start_date
         self.end_date = end_date
@@ -123,8 +123,8 @@ class TQQQSimulator:
         return {
             '총 매수 금액': total_invested,
             '보유 주식 수': self.shares,
-            '최종 평가금액': final_value,
-            '수익률(%)': (final_value / total_invested - 1) * 100 if total_invested > 0 else 0,
+            '최종 평가금액': final_value + self.cash,
+            '수익률(%)': ((final_value + self.cash) / total_invested - 1) * 100 if total_invested > 0 else 0,
             'MDD(%)': max_drawdown * 100,
             '매수 기록': pd.DataFrame(self.portfolio),
             '자산 추이': pd.DataFrame(self.daily_value),
@@ -159,7 +159,8 @@ class TQQQSimulator:
 if __name__ == '__main__':
     st.markdown("## 📊 TQQQ 전략 시뮬레이터")
 
-    ticker = st.text_input("티커 입력", "TQQQ")
+    ticker = st.text_input("매수 대상 티커 (예: TQQQ)", "TQQQ")
+signal_ticker = st.text_input("진입 조건 기준 티커 (예: QQQ)", "QQQ")
     start_date = st.date_input("시작일", pd.to_datetime("2020-01-01"))
     end_date = st.date_input("종료일", pd.to_datetime("2024-12-31"))
     initial_cash = st.number_input("최초 투자금 (원)", value=0, step=10000)
@@ -172,8 +173,10 @@ if __name__ == '__main__':
     chart_start = st.date_input("차트 보기 시작일", pd.to_datetime("2023-01-01"))
     chart_end = st.date_input("차트 보기 종료일", pd.to_datetime("2023-12-31"))
 
-    if exit_recovery <= stop_buy_rally:
-        st.error("❗ 청산 기준은 진입 중단 기준보다 커야 합니다. 값을 다시 설정해주세요.")    
+    if stop_buy_rally >= exit_recovery:
+        st.error("❗ 청산 기준은 매수 중단 기준보다 커야 합니다. 값을 다시 설정해주세요.")
+    elif exit_recovery <= entry_drawdown:
+        st.error("❗ 청산 기준은 진입 중단 기준보다 커야 합니다. 값을 다시 설정해주세요.")
     elif st.button("시뮬레이션 실행"):
         sim = TQQQSimulator(
             ticker=ticker,
@@ -184,7 +187,8 @@ if __name__ == '__main__':
             initial_cash=initial_cash,
             entry_drawdown=entry_drawdown,
             exit_recovery=exit_recovery,
-            stop_buy_rally=stop_buy_rally
+            stop_buy_rally=stop_buy_rally,
+            signal_ticker=signal_ticker
         )
         result = sim.simulate()
 
