@@ -173,9 +173,7 @@ if __name__ == '__main__':
     chart_end = st.date_input("차트 보기 종료일", pd.to_datetime("2023-12-31"))
 
     if exit_recovery <= stop_buy_rally:
-        st.error("❗ 청산 기준은 진입 중단 기준보다 커야 합니다. 값을 다시 설정해주세요.")
-    elif exit_recovery <= entry_drawdown:
-        st.error("❗ 청산 기준은 진입 조건보다 커야 합니다. 값을 다시 설정해주세요.")
+        st.error("❗ 청산 기준은 진입 중단 기준보다 커야 합니다. 값을 다시 설정해주세요.")    
     elif st.button("시뮬레이션 실행"):
         sim = TQQQSimulator(
             ticker=ticker,
