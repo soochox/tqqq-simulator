@@ -222,6 +222,13 @@ if __name__ == '__main__':
 
         st.subheader("📋 매수 기록")
         st.dataframe(result['매수 기록'], use_container_width=True)
+        csv = result['매수 기록'].to_csv(index=False).encode('utf-8-sig')
+        st.download_button(
+            label="📥 매수 기록 CSV 다운로드",
+            data=csv,
+            file_name='매수기록.csv',
+            mime='text/csv'
+        )
 
         st.subheader("📈 자산 추이 그래프")
         fig, ax = plt.subplots(figsize=(10, 4))
