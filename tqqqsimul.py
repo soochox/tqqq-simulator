@@ -23,7 +23,10 @@ class TQQQSimulator:
         self.portfolio = []
         self.daily_value = []
         self.sell_points = []  # 매도 시점 기록
-        self.cumulative_shares = []  # 누적 주식 수 기록
+        self.cumulative_shares = []
+        self.cash_history = []
+        self.cash_shortage_points = []
+        self.cash_ratio_history = []  # 현금 추이 기록  # 누적 주식 수 기록
         self.signal_ticker = signal_ticker
         self.entry_drawdown = entry_drawdown
         self.exit_recovery = exit_recovery
@@ -116,6 +119,14 @@ class TQQQSimulator:
 
             total_value = portfolio_value + self.cash
             self.daily_value.append({"Date": date, "Value": total_value})
+            self.cash_history.append({"Date": date, "Cash": self.cash})
+            if total_value > 0:
+                self.cash_ratio_history.append({"Date": date, "CashRatio": self.cash / total_value})
+            else:
+                self.cash_ratio_history.append({"Date": date, "CashRatio": 0})
+            if self.cash <= 0:
+                self.cash_shortage_points.append(date)
+            self.cash_history.append({"Date": date, "Cash": self.cash})
             self.cumulative_shares.append({"Date": date, "Shares": self.shares})
 
         final_price = self.df['Close'].iloc[-1]
@@ -130,12 +141,17 @@ class TQQQSimulator:
             '매수 기록': pd.DataFrame(self.portfolio),
             '자산 추이': pd.DataFrame(self.daily_value),
             '누적 주식 수': pd.DataFrame(self.cumulative_shares),
+            '현금 추이': pd.DataFrame(self.cash_history),
+            '현금 비중': pd.DataFrame(self.cash_ratio_history),
+            '현금 부족 시점': self.cash_shortage_points,
             '총 매수 횟수': len([x for x in self.portfolio if x['Action'].startswith('정기매수') or x['Action'].startswith('추가매수')]),
             '매도 시점': self.sell_points
         }
 
     def buy(self, date, price, action, amount):
-        if amount > self.cash:
+        if self.cash <= 0:
+            return
+                if amount > self.cash:
             return  # 현금 부족 시 매수 불가
         quantity = amount / price
         self.cash -= amount
@@ -165,11 +181,11 @@ if __name__ == '__main__':
     signal_ticker = st.text_input("진입 조건 기준 티커 (예: QQQ)", "QQQ")
     start_date = st.date_input("시작일", pd.to_datetime("2020-01-01"))
     end_date = st.date_input("종료일", pd.to_datetime("2024-12-31"))
-    initial_cash = st.number_input("최초 투자금 (원)", value=0, step=10000)
+    initial_cash = st.number_input("최초 투자금 (원)", value=10000000, step=10000, format="%d")
     entry_drawdown = st.number_input("고점 대비 하락률 (진입 조건) (%)", min_value=0, max_value=100, value=20, step=1)
     stop_buy_rally = st.number_input("고점 대비 상승률 (진입 중단 조건) (%)", min_value=0, max_value=100, value=5, step=1)
     exit_recovery = st.number_input("고점 대비 상승률 (청산 조건) (%)", min_value=0, max_value=100, value=10, step=1)
-    per_buy_amount = st.number_input("1회 매수 금액 (원)", value=1000000, step=10000)
+    per_buy_amount = st.number_input("1회 매수 금액 (원)", value=100000, step=10000, format="%d")
     buy_interval = st.number_input("정기 매수 간격 (일)", min_value=1, max_value=30, value=5, step=1)
 
     chart_start = st.date_input("차트 보기 시작일", pd.to_datetime("2023-01-01"))
@@ -222,6 +238,29 @@ if __name__ == '__main__':
         ax2.set_title("누적 주식 수 추이")
         ax2.legend()
         st.pyplot(fig2)
+
+        st.subheader("💵 현금 잔액 추이 그래프")
+        cash_df = pd.DataFrame(result['현금 추이'])
+        fig_cash, ax_cash = plt.subplots(figsize=(10, 4))
+        ax_cash.plot(cash_df['Date'], cash_df['Cash'], label="현금 잔액", color='orange')
+        ax_cash.set_xlabel("날짜")
+        ax_cash.set_ylabel("현금")
+        ax_cash.set_title("현금 잔액 추이")
+        ax_cash.legend()
+        st.pyplot(fig_cash)
+
+        st.subheader("📊 현금 비중 (%) 추이")
+        ratio_df = pd.DataFrame(result['현금 비중'])
+        fig_ratio, ax_ratio = plt.subplots(figsize=(10, 3))
+        ax_ratio.plot(ratio_df['Date'], ratio_df['CashRatio'] * 100, label="현금 비중 (%)", color='purple')
+        ax_ratio.set_xlabel("날짜")
+        ax_ratio.set_ylabel("%")
+        ax_ratio.set_title("현금 비중 추이")
+        ax_ratio.legend()
+        st.pyplot(fig_ratio)
+
+        if result['현금 부족 시점']:
+            st.warning(f"⚠️ 현금 부족 발생 시점 {len(result['현금 부족 시점'])}건: 예: {result['현금 부족 시점'][0].strftime('%Y-%m-%d')}")
 
         st.subheader("📉 입력 기간 차트 보기")
         chart_df = sim.df[(sim.df.index >= pd.to_datetime(chart_start)) & (sim.df.index <= pd.to_datetime(chart_end))]
