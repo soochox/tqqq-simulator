@@ -30,15 +30,18 @@ class TQQQSimulator:
         self.signal_ticker = signal_ticker
         self.entry_drawdown = entry_drawdown
         self.exit_recovery = exit_recovery
-        self.signal_df = self.download_data(ticker=signal_ticker)
+        signal_start_date = (pd.to_datetime(self.start_date) - pd.DateOffset(years=2)).strftime('%Y-%m-%d')
+        self.signal_df = self.download_data(ticker=signal_ticker, start=signal_start_date)
         self.stop_buy_rally = stop_buy_rally
         self.signal_max = self.signal_df['Close'].cummax()
         self.compute_indicators()
 
-    def download_data(self, ticker=None):
+    def download_data(self, ticker=None, start=None):
         if ticker is None:
             ticker = self.ticker
-        df = yf.download(ticker, start=self.start_date, end=self.end_date)
+        if start is None:
+            start = self.start_date
+        df = yf.download(ticker, start=start, end=self.end_date)
         df = df[['Close']].copy()
 
         if isinstance(df.columns, pd.MultiIndex):
