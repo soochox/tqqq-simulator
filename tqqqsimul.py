@@ -160,7 +160,7 @@ if __name__ == '__main__':
     st.markdown("## 📊 TQQQ 전략 시뮬레이터")
 
     ticker = st.text_input("매수 대상 티커 (예: TQQQ)", "TQQQ")
-signal_ticker = st.text_input("진입 조건 기준 티커 (예: QQQ)", "QQQ")
+    signal_ticker = st.text_input("진입 조건 기준 티커 (예: QQQ)", "QQQ")
     start_date = st.date_input("시작일", pd.to_datetime("2020-01-01"))
     end_date = st.date_input("종료일", pd.to_datetime("2024-12-31"))
     initial_cash = st.number_input("최초 투자금 (원)", value=0, step=10000)
