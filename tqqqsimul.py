@@ -151,7 +151,7 @@ class TQQQSimulator:
     def buy(self, date, price, action, amount):
         if self.cash <= 0:
             return
-                if amount > self.cash:
+        if amount > self.cash:
             return  # 현금 부족 시 매수 불가
         quantity = amount / price
         self.cash -= amount
