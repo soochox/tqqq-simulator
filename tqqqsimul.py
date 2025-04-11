@@ -114,7 +114,8 @@ class TQQQSimulator:
                 drawdown = (peak_value - portfolio_value) / peak_value
                 max_drawdown = max(max_drawdown, drawdown)
 
-            self.daily_value.append({"Date": date, "Value": portfolio_value})
+            total_value = portfolio_value + self.cash
+            self.daily_value.append({"Date": date, "Value": total_value})
             self.cumulative_shares.append({"Date": date, "Shares": self.shares})
 
         final_price = self.df['Close'].iloc[-1]
@@ -149,6 +150,7 @@ class TQQQSimulator:
         if quantity > self.shares:
             quantity = self.shares
         amount = quantity * price
+        self.cash += quantity * price
         self.shares -= quantity
         self.portfolio.append({
             'Date': date, 'Price': price,
