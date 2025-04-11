@@ -193,8 +193,7 @@ if __name__ == '__main__':
 
     if stop_buy_rally >= exit_recovery:
         st.error("❗ 청산 기준은 매수 중단 기준보다 커야 합니다. 값을 다시 설정해주세요.")
-    elif exit_recovery <= entry_drawdown:
-        st.error("❗ 청산 기준은 진입 중단 기준보다 커야 합니다. 값을 다시 설정해주세요.")
+    
     elif st.button("시뮬레이션 실행"):
         sim = TQQQSimulator(
             ticker=ticker,
