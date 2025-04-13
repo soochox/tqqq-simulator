@@ -169,9 +169,13 @@ class TQQQSimulator:
         self.cash -= amount
         self.shares += quantity
         self.portfolio.append({
-            'Date': date, 'Price': price,
-            'Action': action, 'Amount': amount,
-            'Shares Bought': quantity
+            'Date': date,
+            'Price': price,
+            'Action': action,
+            'Amount': amount,
+            'Shares Bought': quantity,
+            'Signal Peak': entry_peak if '진입' in action else None,
+            'Drawdown (%)': drawdown if '진입' in action else None
         })
 
     def sell(self, date, price, action, quantity):
