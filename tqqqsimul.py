@@ -235,7 +235,7 @@ if __name__ == '__main__':
 
     ticker = st.text_input("매수 대상 티커 (예: TQQQ)", "TQQQ")
     signal_ticker = st.text_input("진입 조건 기준 티커 (예: QQQ)", "QQQ")
-    start_date = st.date_input("시작일", pd.to_datetime("2020-01-01"))
+    start_date = st.date_input("시작일", pd.to_datetime("2021-01-01"))
     end_date = st.date_input("종료일", pd.to_datetime("2024-12-31"))
     initial_cash = st.number_input("최초 투자금 (원)", value=10000000, step=10000, format="%d")
     entry_drawdown = st.number_input("고점 대비 하락률 (진입 조건) (%)", min_value=0, max_value=100, value=20, step=1)
@@ -244,8 +244,8 @@ if __name__ == '__main__':
     per_buy_amount = st.number_input("1회 매수 금액 (원)", value=100000, step=10000, format="%d")
     buy_interval = st.number_input("정기 매수 간격 (일)", min_value=1, max_value=30, value=5, step=1)
 
-    chart_start = st.date_input("차트 보기 시작일", pd.to_datetime("2023-01-01"))
-    chart_end = st.date_input("차트 보기 종료일", pd.to_datetime("2023-12-31"))
+    chart_start = st.date_input("차트 보기 시작일", pd.to_datetime("2021-01-01"))
+    chart_end = st.date_input("차트 보기 종료일", pd.to_datetime("2024-12-31"))
 
     if stop_buy_rally >= exit_recovery:
         st.error("❗ 청산 기준은 매수 중단 기준보다 커야 합니다. 값을 다시 설정해주세요.")
