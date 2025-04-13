@@ -75,6 +75,7 @@ class TQQQSimulator:
         max_drawdown = 0
 
         in_position = False  # 진입 여부 플래그
+        entry_peak = None  # 진입 시점 고점 고정
         for i in range(len(self.df)):
             row = self.df.iloc[i]
             date, price, rsi, dev, week = row.name, row['Close'], row['RSI'], row['Deviation'], row['Week']
@@ -90,15 +91,23 @@ class TQQQSimulator:
             signal_price = self.signal_df['Close'].iloc[i]
             signal_peak = self.signal_max.iloc[i]
             drawdown = (signal_price - signal_peak) / signal_peak * 100
+
             if not in_position and drawdown <= -self.entry_drawdown and signal_price <= signal_peak * (1 + self.stop_buy_rally / 100):
+                entry_peak = signal_peak  # 진입 시점 고점 고정
                 self.buy(date, price, f'진입(DD {drawdown:.2f}%)', self.per_buy_amount)
                 in_position = True
+            signal_price = self.signal_df['Close'].iloc[i]
+            signal_peak = self.signal_max.iloc[i]
+            drawdown = (signal_price - signal_peak) / signal_peak * 100
+            
 
-            # 전략 2: 청산 조건 - signal_ticker가 고점대비 X% 회복
-            if in_position and drawdown >= -self.exit_recovery:
-                self.sell(date, price, f'청산(DD {drawdown:.2f}%)', self.shares)
-                self.sell_points.append((date, price))
-                in_position = False
+            # 전략 2: 청산 조건 - 진입 시점 고점 기준 회복률
+            if in_position:
+                drawdown_since_entry = (signal_price - entry_peak) / entry_peak * 100
+                if drawdown_since_entry >= -self.exit_recovery:
+                    self.sell(date, price, f'청산(DD {drawdown_since_entry:.2f}%)', self.shares)
+                    self.sell_points.append((date, price))
+                    in_position = False
 
             if i % self.buy_interval == 0:
                 self.buy(date, price, '정기매수', self.per_buy_amount)
