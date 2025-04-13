@@ -161,10 +161,10 @@ class TQQQSimulator:
 
         final_price = self.df['Close'].iloc[-1]
         final_value = self.shares * final_price
-        total_invested = sum(x['Amount'] for x in self.portfolio if x['Action'].startswith('정기매수') or x['Action'].startswith('추가매수'))
+        total_shares_bought = sum(x['Shares Bought'] for x in self.portfolio if x['Shares Bought'] > 0)
         return {
-            '최초 보유자산': self.initial_cash,  # 최초 보유자산 정확히 반영
-            '총 매수 금액': total_invested,
+            '최초 보유자산': self.initial_cash,
+            '총 매수 수량': round(total_shares_bought, 1),
             '보유 주식 수': self.shares,
             '최종 평가금액': final_value + self.cash,
             '수익률(%)': round(100 * (final_value + self.cash - self.initial_cash) / self.initial_cash, 2),
@@ -178,6 +178,7 @@ class TQQQSimulator:
             '총 매수 횟수': len([x for x in self.portfolio if x['Action'].startswith('정기매수') or x['Action'].startswith('추가매수')]),
             '매도 시점': self.sell_points
         }
+
 
     def buy(self, date, price, action, amount, signal_peak=None, drawdown=None):
         if self.cash <= 0:
@@ -248,7 +249,7 @@ if __name__ == '__main__':
     entry_drawdown = st.number_input("고점 대비 하락률 (진입 조건) (%)", min_value=0, max_value=100, value=20, step=1)
     stop_buy_rally = st.number_input("고점 대비 상승률 (진입 중단 조건) (%)", min_value=0, max_value=100, value=5, step=1)
     exit_recovery = st.number_input("고점 대비 상승률 (청산 조건) (%)", min_value=0, max_value=100, value=25, step=1)
-    per_buy_amount = st.number_input("1회 매수 금액 (원)", value=2000, step=100, format="%d")
+    per_buy_amount = st.number_input("1회 매수 금액 (달러)", value=2000, step=100, format="%d")
     buy_interval = st.number_input("정기 매수 간격 (일)", min_value=1, max_value=30, value=5, step=1)
     rebalance_interval = st.number_input("리밸런싱 간격 (일)", min_value=1, max_value=120, value=30, step=1)
     rebalance_target_stock_ratio = st.slider("리밸런싱 목표 주식 비중 (%)", min_value=0, max_value=100, value=80, step=5)
@@ -275,10 +276,10 @@ if __name__ == '__main__':
         result = sim.simulate(rebalance_interval=rebalance_interval, rebalance_target_stock_ratio=rebalance_target_stock_ratio)
 
         st.subheader("📌 시뮬레이션 결과")
-        st.write(f"총 매수 금액: {result['총 매수 금액']:,} 달러")
+        st.write(f"총 매수 수량: {result['총 매수 수량']:,} 주")
         st.write(f"최초 보유자산: {result['최초 보유자산']:,} 달러")
-        st.write(f"보유 주식 수: {result['보유 주식 수']:.0f} 주")
-        st.write(f"최종 평가금액: {result['최종 평가금액']:.0f} 달러")
+        st.write(f"최종 보유 주식 수: {result['보유 주식 수']:.0f} 주")
+        st.write(f"최종 평가금액: {result['최종 평가금액']:,.0f} 달러")
         st.write(f"수익률: {result['수익률(%)']:.2f}%")
         st.write(f"Total MDD (%): {result['MDD(%)']:.2f}%")
         st.write(f"총 매수 횟수: {result['총 매수 횟수']} 회")
