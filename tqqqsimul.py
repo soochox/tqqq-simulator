@@ -165,7 +165,7 @@ class TQQQSimulator:
             '총 매수 금액': total_invested,
             '보유 주식 수': self.shares,
             '최종 평가금액': final_value + self.cash,
-            '수익률(%)': ((final_value + self.cash) / total_invested - 1) * 100 if total_invested > 0 else 0,
+            '수익률(%)': round(100 * (1 - total_invested / (final_value + self.cash)), 2) if (final_value + self.cash) > 0 else 0,
             'MDD(%)': max([v['MDD'] for v in self.mdd_history]) if self.mdd_history else 0,
             '매수 기록': pd.DataFrame(self.portfolio),
             '자산 추이': pd.DataFrame(self.daily_value),
