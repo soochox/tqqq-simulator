@@ -15,6 +15,7 @@ matplotlib.rcParams['axes.unicode_minus'] = False
 # 자산 평가, 매매 기록, 현금 흐름 등을 분석하는 기능 포함
 class TQQQSimulator:
     def __init__(self, ticker="TQQQ", start_date="2020-01-01", end_date="2024-12-31", per_buy_amount=1_000_000, buy_interval=5, initial_cash=0, signal_ticker="TQQQ", entry_drawdown=20, exit_recovery=10, stop_buy_rally=5):
+        # 사용자 설정값 및 기본 변수 초기화
         self.ticker = ticker
         self.start_date = start_date
         self.end_date = end_date
@@ -24,44 +25,42 @@ class TQQQSimulator:
         self.cash = initial_cash
         self.shares = 0
         self.portfolio = []
-        self.mdd_history = []  # MDD 기록용
+        self.mdd_history = []
         self.daily_value = []
-        self.sell_points = []  # 매도 시점 기록
+        self.sell_points = []
         self.cumulative_shares = []
         self.cash_history = []
         self.cash_shortage_points = []
-        self.cash_ratio_history = []  # 현금 추이 기록  # 누적 주식 수 기록
+        self.cash_ratio_history = []
         self.signal_ticker = signal_ticker
         self.entry_drawdown = entry_drawdown
         self.exit_recovery = exit_recovery
+
+        # 진입 신호 판단용 기준 주가 데이터 다운로드 및 고점 계산
         signal_start_date = (pd.to_datetime(self.start_date) - pd.DateOffset(years=2)).strftime('%Y-%m-%d')
         self.signal_df = self.download_data(ticker=signal_ticker, start=signal_start_date)
         self.stop_buy_rally = stop_buy_rally
         self.signal_max = self.signal_df['Close'].cummax()
+
+        # 종목간 index 일치화
+        self.df, self.signal_df = self.df.align(self.signal_df, join='inner', axis=0)
         self.compute_indicators()
 
     def download_data(self, ticker=None, start=None):
+        # 야후 파이낸스에서 데이터 다운로드
         if ticker is None:
             ticker = self.ticker
         if start is None:
             start = self.start_date
         df = yf.download(ticker, start=start, end=self.end_date)
         df = df[['Close']].copy()
-
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
-
         df.dropna(inplace=True)
-
-        # st.subheader("📌 다운로드된 원시 데이터 확인")
-        # st.write(df.head())
-        # st.write("컬럼 목록:", df.columns.tolist())
-        # st.write("데이터 타입:", str(type(df)))
-
         return df
 
     def compute_indicators(self):
-        # 기술적 지표 계산 (60일 이동평균, RSI, 이격도)
+        # 이동평균선, RSI, 편차 등의 기술지표 계산
         self.df['60MA'] = self.df['Close'].rolling(window=60).mean()
         delta = self.df['Close'].diff()
         gain = delta.where(delta > 0, 0)
@@ -73,18 +72,8 @@ class TQQQSimulator:
         self.df['Deviation'] = ((self.df['Close'] - self.df['60MA']) / self.df['60MA']) * 100
         self.df['Week'] = self.df.index.to_period('W')
 
-    # 현재 시점의 최대 낙폭(MDD) 계산 함수
     def get_current_mdd(self):
-        if not self.daily_value:
-            return 0
-        values = [v['Value'] for v in self.daily_value]
-        peak = max(values)
-        current = values[-1]
-        if peak == 0:
-            return 0
-        return (peak - current) / peak * 100
-
-    def get_current_mdd(self):
+        # 현재까지 MDD 계산
         if not self.daily_value:
             return 0
         values = [v['Value'] for v in self.daily_value]
@@ -95,14 +84,15 @@ class TQQQSimulator:
         return (peak - current) / peak * 100
 
     def simulate(self):
-        just_entered = False  # 진입한 직후 정기매수를 막기 위한 플래그
+        # 전체 시뮬레이션 실행
+        just_entered = False
         current_week = None
         last_week_rsi = None
         peak_value = 0
         max_drawdown = 0
+        in_position = False
+        entry_peak = None
 
-        in_position = False  # 진입 여부 플래그
-        entry_peak = None  # 진입 시점 고점 고정
         for i in range(len(self.df)):
             row = self.df.iloc[i]
             date, price, rsi, dev, week = row.name, row['Close'], row['RSI'], row['Deviation'], row['Week']
@@ -110,34 +100,25 @@ class TQQQSimulator:
             if week != current_week:
                 current_week = week
                 last_week_rsi = rsi
-                # if rsi >= 70 and self.shares > 0:
-                #     self.sell(date, price, 'RSI70이상_10%매도', self.shares * 0.10)
-                #     self.sell_points.append((date, price))
 
-            # 전략 1: 진입 조건 - signal_ticker가 고점대비 X% 하락
-            # 진입 시점 고점과 하락률을 함께 기록하여 buy()에 전달 (stop_rally 기준 이상 상승 시 진입 금지)
             signal_price = self.signal_df['Close'].iloc[i]
-            signal_peak = self.signal_max.iloc[i]
+            signal_peak = self.signal_df['Close'].loc[:date].max()
             drawdown = (signal_price - signal_peak) / signal_peak * 100
 
             if not in_position and drawdown <= -self.entry_drawdown and signal_price <= signal_peak * (1 + self.stop_buy_rally / 100):
-                entry_peak = signal_peak  # 진입 시점 고점 고정
+                entry_peak = signal_peak
                 self.buy(date, price, f'진입(DD {drawdown:.2f}%)', self.per_buy_amount, signal_peak, drawdown)
                 self.portfolio[-1]['진입 시점 고점'] = signal_peak
                 just_entered = True
                 in_position = True
-            signal_price = self.signal_df['Close'].iloc[i]
-            signal_peak = self.signal_max.iloc[i]
-            drawdown = (signal_price - signal_peak) / signal_peak * 100
-            
 
-            # 전략 2: 청산 조건 - 진입 시점 고점 기준 회복률
-            if in_position:
-                drawdown_since_entry = (signal_price - entry_peak) / entry_peak * 100
-                if drawdown_since_entry >= self.exit_recovery:
-                    self.sell(date, price, f'청산(DD {drawdown_since_entry:.2f}%)', self.shares)
-                    self.sell_points.append((date, price))
-                    in_position = False
+            signal_price = self.signal_df['Close'].iloc[i]
+            drawdown_since_entry = (signal_price - entry_peak) / entry_peak * 100 if entry_peak else 0
+
+            if in_position and drawdown_since_entry >= self.exit_recovery:
+                self.sell(date, price, f'청산(DD {drawdown_since_entry:.2f}%)', self.shares)
+                self.sell_points.append((date, price))
+                in_position = False
 
             if in_position and i % self.buy_interval == 0 and not just_entered:
                 self.buy(date, price, '정기매수', self.per_buy_amount)
@@ -168,7 +149,6 @@ class TQQQSimulator:
                 self.cash_ratio_history.append({"Date": date, "CashRatio": 0})
             if self.cash <= 0:
                 self.cash_shortage_points.append(date)
-            self.cash_history.append({"Date": date, "Cash": self.cash})
             self.cumulative_shares.append({"Date": date, "Shares": self.shares})
             just_entered = False
 
@@ -191,41 +171,42 @@ class TQQQSimulator:
             '매도 시점': self.sell_points
         }
 
-        # 매수 실행 함수
-    # 현금이 충분할 경우 주식 매수 및 포트폴리오 기록에 추가
-    # signal_peak와 drawdown은 진입 시점에만 기록용으로 사용
     def buy(self, date, price, action, amount, signal_peak=None, drawdown=None):
+        # 매수 처리 및 기록
         if self.cash <= 0:
             return
         if amount > self.cash:
-            return  # 현금 부족 시 매수 불가
+            return
         quantity = amount / price
         self.cash -= amount
         self.shares += quantity
         self.portfolio.append({
             'Date': date,
-            'Price': price,
+            'Price': round(price, 1),
             'Action': action,
-            'Amount': amount,
-            'Shares Bought': quantity,
+            'Amount': round(amount, 1),
+            'Shares Bought': round(quantity, 1),
             '신규진입': '진입' in action,
             '매수중지': '중단' in action,
             '청산': '청산' in action,
-            '기준 주가': self.signal_df['Close'].loc[date]  # 기준 주식 가격 추가
+            f"기준 주가({self.signal_ticker})": round(self.signal_df['Close'].loc[date], 1),
+            '진입 시점 고점': round(signal_peak, 1) if signal_peak else '',
+            'Signal Peak': round(signal_peak, 1) if signal_peak else '',
+            'Drawdown (%)': round(drawdown, 1) if drawdown else ''
         })
 
-        # 청산(매도) 실행 함수
-    # 보유 주식을 지정된 수량만큼 매도하고 현금 증가 반영
     def sell(self, date, price, action, quantity):
+        # 매도 처리 및 기록
         if quantity > self.shares:
             quantity = self.shares
         amount = quantity * price
         self.cash += quantity * price
         self.shares -= quantity
         self.portfolio.append({
-            'Date': date, 'Price': price,
-            'Action': action, 'Amount': -amount,
-            'Shares Bought': -quantity
+            'Date': date, 'Price': round(price, 1),
+            'Action': action, 'Amount': round(-amount, 1),
+            'Shares Bought': round(-quantity, 1),
+            f"기준 주가({self.signal_ticker})": round(self.signal_df['Close'].loc[date], 1)
         })
 
 if __name__ == '__main__':
