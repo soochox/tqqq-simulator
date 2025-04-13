@@ -187,8 +187,6 @@ class TQQQSimulator:
             '매수중지': '중단' in action,
             '청산': '청산' in action,
             'Signal Peak': signal_peak if '진입' in action else None,
-            'Drawdown (%)': drawdown if '진입' in action else None,
-            'Signal Peak': entry_peak if '진입' in action else None,
             'Drawdown (%)': drawdown if '진입' in action else None
         })
 
