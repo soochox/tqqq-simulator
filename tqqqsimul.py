@@ -10,12 +10,8 @@ import matplotlib
 matplotlib.rcParams['font.family'] = 'Malgun Gothic'
 matplotlib.rcParams['axes.unicode_minus'] = False
 
-# TQQQ 전략 시뮬레이터 클래스
-# 사용자 입력 기반으로 전략적 매수, 청산 조건을 시뮬레이션하며
-# 자산 평가, 매매 기록, 현금 흐름 등을 분석하는 기능 포함
 class TQQQSimulator:
     def __init__(self, ticker="TQQQ", start_date="2020-01-01", end_date="2024-12-31", per_buy_amount=1_000_000, buy_interval=5, initial_cash=0, signal_ticker="TQQQ", entry_drawdown=20, exit_recovery=10, stop_buy_rally=5):
-        # 사용자 설정값 및 기본 변수 초기화
         self.ticker = ticker
         self.start_date = start_date
         self.end_date = end_date
@@ -35,19 +31,14 @@ class TQQQSimulator:
         self.signal_ticker = signal_ticker
         self.entry_drawdown = entry_drawdown
         self.exit_recovery = exit_recovery
-
-        # 진입 신호 판단용 기준 주가 데이터 다운로드 및 고점 계산
         signal_start_date = (pd.to_datetime(self.start_date) - pd.DateOffset(years=2)).strftime('%Y-%m-%d')
         self.signal_df = self.download_data(ticker=signal_ticker, start=signal_start_date)
         self.stop_buy_rally = stop_buy_rally
         self.signal_max = self.signal_df['Close'].cummax()
-
-        # 종목간 index 일치화
         self.df, self.signal_df = self.df.align(self.signal_df, join='inner', axis=0)
         self.compute_indicators()
 
     def download_data(self, ticker=None, start=None):
-        # 야후 파이낸스에서 데이터 다운로드
         if ticker is None:
             ticker = self.ticker
         if start is None:
@@ -60,7 +51,6 @@ class TQQQSimulator:
         return df
 
     def compute_indicators(self):
-        # 이동평균선, RSI, 편차 등의 기술지표 계산
         self.df['60MA'] = self.df['Close'].rolling(window=60).mean()
         delta = self.df['Close'].diff()
         gain = delta.where(delta > 0, 0)
@@ -73,7 +63,6 @@ class TQQQSimulator:
         self.df['Week'] = self.df.index.to_period('W')
 
     def get_current_mdd(self):
-        # 현재까지 MDD 계산
         if not self.daily_value:
             return 0
         values = [v['Value'] for v in self.daily_value]
@@ -84,7 +73,6 @@ class TQQQSimulator:
         return (peak - current) / peak * 100
 
     def simulate(self):
-        # 전체 시뮬레이션 실행
         just_entered = False
         current_week = None
         last_week_rsi = None
@@ -107,32 +95,43 @@ class TQQQSimulator:
 
             if not in_position and drawdown <= -self.entry_drawdown and signal_price <= signal_peak * (1 + self.stop_buy_rally / 100):
                 entry_peak = signal_peak
-                self.buy(date, price, f'진입(DD {drawdown:.2f}%)', self.per_buy_amount, signal_peak, drawdown)
+                drawdown_from_entry_peak = (signal_price - entry_peak) / entry_peak * 100
+                self.buy(date, price, f'진입(DD {drawdown:.2f}%)', self.per_buy_amount, signal_peak, drawdown_from_entry_peak)
                 self.portfolio[-1]['진입 시점 고점'] = signal_peak
                 just_entered = True
                 in_position = True
 
-            signal_price = self.signal_df['Close'].iloc[i]
-            drawdown_since_entry = (signal_price - entry_peak) / entry_peak * 100 if entry_peak else 0
+            if in_position:
+                drawdown_from_entry_peak = (signal_price - entry_peak) / entry_peak * 100
+            else:
+                drawdown_from_entry_peak = None
 
-            if in_position and drawdown_since_entry >= self.exit_recovery:
-                self.sell(date, price, f'청산(DD {drawdown_since_entry:.2f}%)', self.shares)
+            if in_position and drawdown_from_entry_peak is not None and drawdown_from_entry_peak >= self.exit_recovery:
+                self.sell(date, price, f'청산(DD {drawdown_from_entry_peak:.2f}%)', self.shares)
                 self.sell_points.append((date, price))
                 in_position = False
 
-            if in_position and i % self.buy_interval == 0 and not just_entered:
-                self.buy(date, price, '정기매수', self.per_buy_amount)
+            elif not in_position and signal_price >= signal_peak * (1 + self.stop_buy_rally / 100):
+                self.buy(date, price, f'매수중지(고점 {self.stop_buy_rally}%)', 0, signal_peak, drawdown_from_entry_peak)
 
-            if not np.isnan(rsi) and not np.isnan(dev):
-                amount = 0
-                if rsi < 30 and dev < -10:
-                    amount = self.per_buy_amount
-                if rsi < 25 and dev < -15:
-                    amount = self.per_buy_amount * 2
-                if rsi < 20 and dev < -20:
-                    amount = self.per_buy_amount * 3
-                if in_position and amount > 0:
-                    self.buy(date, price, '추가매수', amount)
+            if in_position and i % self.buy_interval == 0 and not just_entered:
+                 # 고점 상승률 초과 시 정기매수 중지
+                if signal_price >= entry_peak * (1 + self.stop_buy_rally / 100):
+                    self.buy(date, price, f'매수중지(고점 {self.stop_buy_rally}%)', 0, entry_peak, drawdown_from_entry_peak)
+                else:
+                    self.buy(date, price, '정기매수', self.per_buy_amount, entry_peak, drawdown_from_entry_peak)
+
+            # 추가매수 전략 (현재 주석 처리)
+            # if not np.isnan(rsi) and not np.isnan(dev):
+            #     amount = 0
+            #     if rsi < 30 and dev < -10:
+            #         amount = self.per_buy_amount
+            #     if rsi < 25 and dev < -15:
+            #         amount = self.per_buy_amount * 2
+            #     if rsi < 20 and dev < -20:
+            #         amount = self.per_buy_amount * 3
+            #     if in_position and amount > 0:
+            #         self.buy(date, price, '추가매수', amount, entry_peak, drawdown_from_entry_peak)
 
             portfolio_value = self.shares * price
             peak_value = max(peak_value, portfolio_value)
@@ -172,7 +171,6 @@ class TQQQSimulator:
         }
 
     def buy(self, date, price, action, amount, signal_peak=None, drawdown=None):
-        # 매수 처리 및 기록
         if self.cash <= 0:
             return
         if amount > self.cash:
@@ -190,17 +188,16 @@ class TQQQSimulator:
             '매수중지': '중단' in action,
             '청산': '청산' in action,
             f"기준 주가({self.signal_ticker})": round(self.signal_df['Close'].loc[date], 1),
-            '진입 시점 고점': round(signal_peak, 1) if signal_peak else '',
+            '진입 시점 고점': round(signal_peak, 1) if signal_peak is not None else np.nan,
             'Signal Peak': round(signal_peak, 1) if signal_peak else '',
-            'Drawdown (%)': round(drawdown, 1) if drawdown else ''
+            'Drawdown (%)': round(drawdown, 1) if drawdown is not None else ''
         })
 
     def sell(self, date, price, action, quantity):
-        # 매도 처리 및 기록
         if quantity > self.shares:
             quantity = self.shares
         amount = quantity * price
-        self.cash += quantity * price
+        self.cash += amount
         self.shares -= quantity
         self.portfolio.append({
             'Date': date, 'Price': round(price, 1),
@@ -208,6 +205,7 @@ class TQQQSimulator:
             'Shares Bought': round(-quantity, 1),
             f"기준 주가({self.signal_ticker})": round(self.signal_df['Close'].loc[date], 1)
         })
+
 
 if __name__ == '__main__':
     st.markdown("## 📊 TQQQ 전략 시뮬레이터")
@@ -323,3 +321,4 @@ if __name__ == '__main__':
             st.pyplot(fig3)
         else:
             st.warning("선택한 기간에 데이터가 없습니다.")
+
