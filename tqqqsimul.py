@@ -10,6 +10,9 @@ import matplotlib
 matplotlib.rcParams['font.family'] = 'Malgun Gothic'
 matplotlib.rcParams['axes.unicode_minus'] = False
 
+# TQQQ 전략 시뮬레이터 클래스
+# 사용자 입력 기반으로 전략적 매수, 청산 조건을 시뮬레이션하며
+# 자산 평가, 매매 기록, 현금 흐름 등을 분석하는 기능 포함
 class TQQQSimulator:
     def __init__(self, ticker="TQQQ", start_date="2020-01-01", end_date="2024-12-31", per_buy_amount=1_000_000, buy_interval=5, initial_cash=0, signal_ticker="TQQQ", entry_drawdown=20, exit_recovery=10, stop_buy_rally=5):
         self.ticker = ticker
@@ -68,6 +71,8 @@ class TQQQSimulator:
         self.df['Deviation'] = ((self.df['Close'] - self.df['60MA']) / self.df['60MA']) * 100
         self.df['Week'] = self.df.index.to_period('W')
 
+        # 전략 실행 함수
+    # 정기매수, 기술적 지표 기반 추가매수, 고점 대비 조건 기반 진입/청산 로직 구현
     def simulate(self):
         current_week = None
         last_week_rsi = None
@@ -87,14 +92,15 @@ class TQQQSimulator:
                 #     self.sell(date, price, 'RSI70이상_10%매도', self.shares * 0.10)
                 #     self.sell_points.append((date, price))
 
-            # 전략 1: 진입 조건 - signal_ticker가 고점대비 X% 하락 (stop_rally 기준 이상 상승 시 진입 금지)
+            # 전략 1: 진입 조건 - signal_ticker가 고점대비 X% 하락
+            # 진입 시점 고점과 하락률을 함께 기록하여 buy()에 전달 (stop_rally 기준 이상 상승 시 진입 금지)
             signal_price = self.signal_df['Close'].iloc[i]
             signal_peak = self.signal_max.iloc[i]
             drawdown = (signal_price - signal_peak) / signal_peak * 100
 
             if not in_position and drawdown <= -self.entry_drawdown and signal_price <= signal_peak * (1 + self.stop_buy_rally / 100):
                 entry_peak = signal_peak  # 진입 시점 고점 고정
-                self.buy(date, price, f'진입(DD {drawdown:.2f}%)', self.per_buy_amount)
+                self.buy(date, price, f'진입(DD {drawdown:.2f}%)', self.per_buy_amount, signal_peak, drawdown)
                 in_position = True
             signal_price = self.signal_df['Close'].iloc[i]
             signal_peak = self.signal_max.iloc[i]
@@ -104,7 +110,7 @@ class TQQQSimulator:
             # 전략 2: 청산 조건 - 진입 시점 고점 기준 회복률
             if in_position:
                 drawdown_since_entry = (signal_price - entry_peak) / entry_peak * 100
-                if drawdown_since_entry >= -self.exit_recovery:
+                if drawdown_since_entry >= self.exit_recovery:
                     self.sell(date, price, f'청산(DD {drawdown_since_entry:.2f}%)', self.shares)
                     self.sell_points.append((date, price))
                     in_position = False
@@ -160,7 +166,10 @@ class TQQQSimulator:
             '매도 시점': self.sell_points
         }
 
-    def buy(self, date, price, action, amount):
+        # 매수 실행 함수
+    # 현금이 충분할 경우 주식 매수 및 포트폴리오 기록에 추가
+    # signal_peak와 drawdown은 진입 시점에만 기록용으로 사용
+    def buy(self, date, price, action, amount, signal_peak=None, drawdown=None):
         if self.cash <= 0:
             return
         if amount > self.cash:
@@ -174,10 +183,17 @@ class TQQQSimulator:
             'Action': action,
             'Amount': amount,
             'Shares Bought': quantity,
+            '신규진입': '진입' in action,
+            '매수중지': '중단' in action,
+            '청산': '청산' in action,
+            'Signal Peak': signal_peak if '진입' in action else None,
+            'Drawdown (%)': drawdown if '진입' in action else None,
             'Signal Peak': entry_peak if '진입' in action else None,
             'Drawdown (%)': drawdown if '진입' in action else None
         })
 
+        # 청산(매도) 실행 함수
+    # 보유 주식을 지정된 수량만큼 매도하고 현금 증가 반영
     def sell(self, date, price, action, quantity):
         if quantity > self.shares:
             quantity = self.shares
@@ -293,7 +309,9 @@ if __name__ == '__main__':
             # 매수 시점 표시
             buy_df = result['매수 기록']
             buy_df_in_range = buy_df[(buy_df['Date'] >= pd.to_datetime(chart_start)) & (buy_df['Date'] <= pd.to_datetime(chart_end))]
-            ax3.scatter(buy_df_in_range['Date'], buy_df_in_range['Price'], color='red', marker='^', label='매수 시점')
+            ax3.scatter(buy_df_in_range[buy_df_in_range['신규진입']]['Date'], buy_df_in_range[buy_df_in_range['신규진입']]['Price'], color='blue', marker='^', label='신규진입')
+            ax3.scatter(buy_df_in_range[buy_df_in_range['청산']]['Date'], buy_df_in_range[buy_df_in_range['청산']]['Price'], color='black', marker='v', label='청산')
+            ax3.scatter(buy_df_in_range[buy_df_in_range['매수중지']]['Date'], buy_df_in_range[buy_df_in_range['매수중지']]['Price'], color='gray', marker='x', label='매수중지')
             ax3.set_title(f"{ticker} 차트 ({chart_start} ~ {chart_end})")
             ax3.set_xlabel("날짜")
             ax3.set_ylabel("가격")
