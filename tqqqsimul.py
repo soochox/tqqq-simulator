@@ -178,19 +178,22 @@ class TQQQSimulator:
         quantity = amount / price
         self.cash -= amount
         self.shares += quantity
+        portfolio_value = self.shares * price + self.cash
+        mdd = self.get_current_mdd()
+        self.mdd_history.append({'Date': date, 'MDD': mdd})
         self.portfolio.append({
             'Date': date,
             'Price': round(price, 1),
             'Action': action,
             'Amount': round(amount, 1),
             'Shares Bought': round(quantity, 1),
-            '신규진입': '진입' in action,
-            '매수중지': '중단' in action,
-            '청산': '청산' in action,
+            '신규진입': bool('진입' in action),
+            '매수중지': bool('중단' in action),
+            '청산': bool('청산' in action),
             f"기준 주가({self.signal_ticker})": round(self.signal_df['Close'].loc[date], 1),
-            '진입 시점 고점': round(signal_peak, 1) if signal_peak is not None else np.nan,
-            'Signal Peak': round(signal_peak, 1) if signal_peak else '',
-            'Drawdown (%)': round(drawdown, 1) if drawdown is not None else ''
+            '진입 시점 고점': round(signal_peak, 1) if signal_peak is not None else np.nan,            
+            'Drawdown (%)': round(drawdown, 1) if drawdown is not None else '',
+            'Total MDD (%)': round(mdd, 1)
         })
 
     def sell(self, date, price, action, quantity):
@@ -199,12 +202,32 @@ class TQQQSimulator:
         amount = quantity * price
         self.cash += amount
         self.shares -= quantity
+        portfolio_value = self.shares * price + self.cash
+        mdd = self.get_current_mdd()
+        self.mdd_history.append({'Date': date, 'MDD': mdd})
         self.portfolio.append({
-            'Date': date, 'Price': round(price, 1),
-            'Action': action, 'Amount': round(-amount, 1),
+            'Date': date,
+            'Price': round(price, 1),
+            'Action': action,
+            'Amount': round(-amount, 1),
             'Shares Bought': round(-quantity, 1),
-            f"기준 주가({self.signal_ticker})": round(self.signal_df['Close'].loc[date], 1)
+            '신규진입': False,
+            '매수중지': False,
+            '청산': True,
+            f"기준 주가({self.signal_ticker})": round(self.signal_df['Close'].loc[date], 1),
+            'Total MDD (%)': round(mdd, 1)
         })
+
+    def get_current_mdd(self):
+        if not self.daily_value:
+            return 0
+        values = [v['Value'] for v in self.daily_value]
+        peak = max(values)
+        current = values[-1]
+        if peak == 0:
+            return 0
+        return (peak - current) / peak * 100
+
 
 
 if __name__ == '__main__':
