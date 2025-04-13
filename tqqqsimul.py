@@ -84,6 +84,16 @@ class TQQQSimulator:
             return 0
         return (peak - current) / peak * 100
 
+    def get_current_mdd(self):
+        if not self.daily_value:
+            return 0
+        values = [v['Value'] for v in self.daily_value]
+        peak = max(values)
+        current = values[-1]
+        if peak == 0:
+            return 0
+        return (peak - current) / peak * 100
+
     def simulate(self):
         current_week = None
         last_week_rsi = None
