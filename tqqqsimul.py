@@ -61,6 +61,7 @@ class TQQQSimulator:
         return df
 
     def compute_indicators(self):
+        # 기술적 지표 계산 (60일 이동평균, RSI, 이격도)
         self.df['60MA'] = self.df['Close'].rolling(window=60).mean()
         delta = self.df['Close'].diff()
         gain = delta.where(delta > 0, 0)
@@ -72,9 +73,8 @@ class TQQQSimulator:
         self.df['Deviation'] = ((self.df['Close'] - self.df['60MA']) / self.df['60MA']) * 100
         self.df['Week'] = self.df.index.to_period('W')
 
-        # 전략 실행 함수
-    # 정기매수, 기술적 지표 기반 추가매수, 고점 대비 조건 기반 진입/청산 로직 구현
-        def get_current_mdd(self):
+    # 현재 시점의 최대 낙폭(MDD) 계산 함수
+    def get_current_mdd(self):
         if not self.daily_value:
             return 0
         values = [v['Value'] for v in self.daily_value]
@@ -211,11 +211,6 @@ class TQQQSimulator:
             'Drawdown (%)': drawdown if '진입' in action else None,
             '최고가': self.signal_max.iloc[-1] if '진입' in action else None,
             'MDD(%)': self.get_current_mdd() if '진입' in action else None
-            '신규진입': '진입' in action,
-            '매수중지': '중단' in action,
-            '청산': '청산' in action,
-            'Signal Peak': signal_peak if '진입' in action else None,
-            'Drawdown (%)': drawdown if '진입' in action else None
         })
 
         # 청산(매도) 실행 함수
