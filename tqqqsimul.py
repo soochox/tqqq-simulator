@@ -239,7 +239,7 @@ class TQQQSimulator:
         return (peak - current) / peak * 100
 
 if __name__ == '__main__':
-    st.markdown("## 📊 TQQQ 전략 시뮬레이터")
+    st.markdown("## 📊 적립식 레버리지 매수 전략 시뮬레이터")
 
     ticker = st.text_input("매수 대상 티커 (예: TQQQ)", "TQQQ")
     signal_ticker = st.text_input("진입 조건 기준 티커 (예: QQQ)", "QQQ")
