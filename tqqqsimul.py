@@ -73,20 +73,8 @@ class TQQQSimulator:
         return (peak - current) / peak * 100
 
     def simulate(self, rebalance_interval=30, rebalance_target_stock_ratio=0.8):
+        rebalance_day_counter = 0
         just_entered = False
-            # 리밸런싱 조건
-            rebalance_day_counter += 1
-            if rebalance_day_counter >= rebalance_interval:
-                total_value = self.shares * price + self.cash
-                target_stock_value = total_value * rebalance_target_stock_ratio
-                current_stock_value = self.shares * price
-                if current_stock_value > target_stock_value * 1.05:
-                    excess_value = current_stock_value - target_stock_value
-                    self.sell(date, price, '리밸런싱 매도', excess_value / price)
-                elif current_stock_value < target_stock_value * 0.95 and self.cash > 0:
-                    needed_value = min(target_stock_value - current_stock_value, self.cash)
-                    self.buy(date, price, '리밸런싱 매수', needed_value, entry_peak, drawdown_from_entry_peak)
-                rebalance_day_counter = 0
         rebalance_day_counter = 0
         current_week = None
         last_week_rsi = None
@@ -96,6 +84,7 @@ class TQQQSimulator:
         entry_peak = None
 
         for i in range(len(self.df)):
+            rebalance_day_counter += 1
             row = self.df.iloc[i]
             date, price, rsi, dev, week = row.name, row['Close'], row['RSI'], row['Deviation'], row['Week']
 
@@ -157,12 +146,25 @@ class TQQQSimulator:
             self.daily_value.append({"Date": date, "Value": total_value})
             self.cash_history.append({"Date": date, "Cash": self.cash})
             if total_value > 0:
-                self.cash_ratio_history.append({"Date": date, "CashRatio": self.cash / total_value})
+                self.cash_ratio_history.append({"Date": date, "CashRatio": round(self.cash / total_value * 100, 1), "StockRatio": round(self.shares * price / total_value * 100, 1), "TotalValue": round(total_value, 1), "Remaining Cash": round(self.cash, 1), "Stock Value": round(self.shares * price, 1)})
             else:
                 self.cash_ratio_history.append({"Date": date, "CashRatio": 0})
             if self.cash <= 0:
                 self.cash_shortage_points.append(date)
             self.cumulative_shares.append({"Date": date, "Shares": self.shares})
+                        # 리밸런싱 조건
+            if rebalance_day_counter >= rebalance_interval:
+                total_value = self.shares * price + self.cash
+                target_stock_value = total_value * rebalance_target_stock_ratio
+                current_stock_value = self.shares * price
+                if current_stock_value > target_stock_value * 1.05:
+                    excess_value = current_stock_value - target_stock_value
+                    self.sell(date, price, '리밸런싱 매도', excess_value / price)
+                elif current_stock_value < target_stock_value * 0.95 and self.cash > 0:
+                    needed_value = min(target_stock_value - current_stock_value, self.cash)
+                    self.buy(date, price, '리밸런싱 매수', needed_value, entry_peak, drawdown_from_entry_peak)
+                rebalance_day_counter = 0
+
             just_entered = False
 
         final_price = self.df['Close'].iloc[-1]
@@ -173,7 +175,7 @@ class TQQQSimulator:
             '보유 주식 수': self.shares,
             '최종 평가금액': final_value + self.cash,
             '수익률(%)': ((final_value + self.cash) / total_invested - 1) * 100 if total_invested > 0 else 0,
-            'MDD(%)': max_drawdown * 100,
+            'MDD(%)': max([v['MDD'] for v in self.mdd_history]) if self.mdd_history else 0,
             '매수 기록': pd.DataFrame(self.portfolio),
             '자산 추이': pd.DataFrame(self.daily_value),
             '누적 주식 수': pd.DataFrame(self.cumulative_shares),
@@ -251,14 +253,14 @@ if __name__ == '__main__':
     signal_ticker = st.text_input("진입 조건 기준 티커 (예: QQQ)", "QQQ")
     start_date = st.date_input("시작일", pd.to_datetime("2021-01-01"))
     end_date = st.date_input("종료일", pd.to_datetime("2024-12-31"))
-    initial_cash = st.number_input("최초 투자금 (원)", value=10000000, step=10000, format="%d")
+    initial_cash = st.number_input("최초 투자금 (달러)", value=100000, step=100, format="%d")
     entry_drawdown = st.number_input("고점 대비 하락률 (진입 조건) (%)", min_value=0, max_value=100, value=20, step=1)
     stop_buy_rally = st.number_input("고점 대비 상승률 (진입 중단 조건) (%)", min_value=0, max_value=100, value=5, step=1)
-    exit_recovery = st.number_input("고점 대비 상승률 (청산 조건) (%)", min_value=0, max_value=100, value=10, step=1)
-    per_buy_amount = st.number_input("1회 매수 금액 (원)", value=100000, step=10000, format="%d")
+    exit_recovery = st.number_input("고점 대비 상승률 (청산 조건) (%)", min_value=0, max_value=100, value=25, step=1)
+    per_buy_amount = st.number_input("1회 매수 금액 (원)", value=2000, step=100, format="%d")
     buy_interval = st.number_input("정기 매수 간격 (일)", min_value=1, max_value=30, value=5, step=1)
     rebalance_interval = st.number_input("리밸런싱 간격 (일)", min_value=1, max_value=120, value=30, step=1)
-    rebalance_target_stock_ratio = st.slider("리밸런싱 목표 주식 비중 (%)", min_value=0, max_value=100, value=80, step=5) / 100", min_value=1, max_value=30, value=5, step=1)
+    rebalance_target_stock_ratio = st.slider("리밸런싱 목표 주식 비중 (%)", min_value=0, max_value=100, value=80, step=5)
 
     chart_start = st.date_input("차트 보기 시작일", pd.to_datetime("2021-01-01"))
     chart_end = st.date_input("차트 보기 종료일", pd.to_datetime("2024-12-31"))
@@ -282,16 +284,19 @@ if __name__ == '__main__':
         result = sim.simulate(rebalance_interval=rebalance_interval, rebalance_target_stock_ratio=rebalance_target_stock_ratio)
 
         st.subheader("📌 시뮬레이션 결과")
-        st.write(f"총 매수 금액: {result['총 매수 금액']:,} 원")
-        st.write(f"보유 주식 수: {result['보유 주식 수']:.4f} 주")
-        st.write(f"최종 평가금액: {result['최종 평가금액']:,} 원")
+        st.write(f"총 매수 금액: {result['총 매수 금액']:,} 달러")
+        st.write(f"보유 주식 수: {result['보유 주식 수']:.0f} 주")
+        st.write(f"최종 평가금액: {result['최종 평가금액']:.0f} 달러")
         st.write(f"수익률: {result['수익률(%)']:.2f}%")
-        st.write(f"MDD (최대 낙폭): {result['MDD(%)']:.2f}%")
+        st.write(f"Total MDD (%): {result['MDD(%)']:.2f}%")
         st.write(f"총 매수 횟수: {result['총 매수 횟수']} 회")
 
         st.subheader("📋 매수 기록")
-        st.dataframe(result['매수 기록'], use_container_width=True)
-        csv = result['매수 기록'].to_csv(index=False).encode('utf-8-sig')
+        buy_df_display = result['매수 기록'].copy()
+        ratio_df = pd.DataFrame(result['현금 비중'])
+        buy_df_display = pd.merge(buy_df_display, ratio_df, on='Date', how='left')
+        st.dataframe(buy_df_display, use_container_width=True)
+        csv = buy_df_display.to_csv(index=False).encode('utf-8-sig')
         st.download_button(
             label="📥 매수 기록 CSV 다운로드",
             data=csv,
