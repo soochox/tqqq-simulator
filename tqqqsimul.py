@@ -24,6 +24,7 @@ class TQQQSimulator:
         self.cash = initial_cash
         self.shares = 0
         self.portfolio = []
+        self.mdd_history = []  # MDD 기록용
         self.daily_value = []
         self.sell_points = []  # 매도 시점 기록
         self.cumulative_shares = []
@@ -73,6 +74,16 @@ class TQQQSimulator:
 
         # 전략 실행 함수
     # 정기매수, 기술적 지표 기반 추가매수, 고점 대비 조건 기반 진입/청산 로직 구현
+        def get_current_mdd(self):
+        if not self.daily_value:
+            return 0
+        values = [v['Value'] for v in self.daily_value]
+        peak = max(values)
+        current = values[-1]
+        if peak == 0:
+            return 0
+        return (peak - current) / peak * 100
+
     def simulate(self):
         current_week = None
         last_week_rsi = None
@@ -115,7 +126,7 @@ class TQQQSimulator:
                     self.sell_points.append((date, price))
                     in_position = False
 
-            if i % self.buy_interval == 0:
+            if in_position and i % self.buy_interval == 0:
                 self.buy(date, price, '정기매수', self.per_buy_amount)
 
             if not np.isnan(rsi) and not np.isnan(dev):
@@ -126,7 +137,7 @@ class TQQQSimulator:
                     amount = self.per_buy_amount * 2
                 if rsi < 20 and dev < -20:
                     amount = self.per_buy_amount * 3
-                if amount > 0:
+                if in_position and amount > 0:
                     self.buy(date, price, '추가매수', amount)
 
             portfolio_value = self.shares * price
@@ -183,6 +194,13 @@ class TQQQSimulator:
             'Action': action,
             'Amount': amount,
             'Shares Bought': quantity,
+            '신규진입': '진입' in action,
+            '매수중지': '중단' in action,
+            '청산': '청산' in action,
+            'Signal Peak': signal_peak if '진입' in action else None,
+            'Drawdown (%)': drawdown if '진입' in action else None,
+            '최고가': self.signal_max.iloc[-1] if '진입' in action else None,
+            'MDD(%)': self.get_current_mdd() if '진입' in action else None
             '신규진입': '진입' in action,
             '매수중지': '중단' in action,
             '청산': '청산' in action,
@@ -307,6 +325,7 @@ if __name__ == '__main__':
             # 매수 시점 표시
             buy_df = result['매수 기록']
             buy_df_in_range = buy_df[(buy_df['Date'] >= pd.to_datetime(chart_start)) & (buy_df['Date'] <= pd.to_datetime(chart_end))]
+            buy_df_in_range = buy_df_in_range.fillna({'신규진입': False, '청산': False, '매수중지': False})
             ax3.scatter(buy_df_in_range[buy_df_in_range['신규진입']]['Date'], buy_df_in_range[buy_df_in_range['신규진입']]['Price'], color='blue', marker='^', label='신규진입')
             ax3.scatter(buy_df_in_range[buy_df_in_range['청산']]['Date'], buy_df_in_range[buy_df_in_range['청산']]['Price'], color='black', marker='v', label='청산')
             ax3.scatter(buy_df_in_range[buy_df_in_range['매수중지']]['Date'], buy_df_in_range[buy_df_in_range['매수중지']]['Price'], color='gray', marker='x', label='매수중지')
