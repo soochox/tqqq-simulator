@@ -95,6 +95,7 @@ class TQQQSimulator:
         return (peak - current) / peak * 100
 
     def simulate(self):
+        just_entered = False  # 진입한 직후 정기매수를 막기 위한 플래그
         current_week = None
         last_week_rsi = None
         peak_value = 0
@@ -122,6 +123,8 @@ class TQQQSimulator:
             if not in_position and drawdown <= -self.entry_drawdown and signal_price <= signal_peak * (1 + self.stop_buy_rally / 100):
                 entry_peak = signal_peak  # 진입 시점 고점 고정
                 self.buy(date, price, f'진입(DD {drawdown:.2f}%)', self.per_buy_amount, signal_peak, drawdown)
+                self.portfolio[-1]['진입 시점 고점'] = signal_peak
+                just_entered = True
                 in_position = True
             signal_price = self.signal_df['Close'].iloc[i]
             signal_peak = self.signal_max.iloc[i]
@@ -136,7 +139,7 @@ class TQQQSimulator:
                     self.sell_points.append((date, price))
                     in_position = False
 
-            if in_position and i % self.buy_interval == 0:
+            if in_position and i % self.buy_interval == 0 and not just_entered:
                 self.buy(date, price, '정기매수', self.per_buy_amount)
 
             if not np.isnan(rsi) and not np.isnan(dev):
@@ -167,6 +170,7 @@ class TQQQSimulator:
                 self.cash_shortage_points.append(date)
             self.cash_history.append({"Date": date, "Cash": self.cash})
             self.cumulative_shares.append({"Date": date, "Shares": self.shares})
+            just_entered = False
 
         final_price = self.df['Close'].iloc[-1]
         final_value = self.shares * final_price
@@ -207,11 +211,7 @@ class TQQQSimulator:
             '신규진입': '진입' in action,
             '매수중지': '중단' in action,
             '청산': '청산' in action,
-            'Signal Peak': signal_peak if '진입' in action else None,
-            'Drawdown (%)': drawdown if '진입' in action else None,
-            '최고가': self.signal_max.iloc[-1] if '진입' in action else None,
-            'MDD(%)': self.get_current_mdd() if '진입' in action else None,
-            '고점 대비 변화율(%)': ((price - signal_peak) / signal_peak * 100) if '진입' in action and signal_peak else None
+            '기준 주가': self.signal_df['Close'].loc[date]  # 기준 주식 가격 추가
         })
 
         # 청산(매도) 실행 함수
@@ -329,7 +329,7 @@ if __name__ == '__main__':
             ax3.plot(chart_df.index, chart_df['Close'], label="종가")
 
             # 매수 시점 표시
-            buy_df = result['매수 기록']
+            buy_df = result['매수 기록'].reset_index(drop=True)
             buy_df_in_range = buy_df[(buy_df['Date'] >= pd.to_datetime(chart_start)) & (buy_df['Date'] <= pd.to_datetime(chart_end))]
             buy_df_in_range = buy_df_in_range.fillna({'신규진입': False, '청산': False, '매수중지': False})
             ax3.scatter(buy_df_in_range[buy_df_in_range['신규진입']]['Date'], buy_df_in_range[buy_df_in_range['신규진입']]['Price'], color='blue', marker='^', label='신규진입')
