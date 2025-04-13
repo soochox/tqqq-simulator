@@ -72,8 +72,22 @@ class TQQQSimulator:
             return 0
         return (peak - current) / peak * 100
 
-    def simulate(self):
+    def simulate(self, rebalance_interval=30, rebalance_target_stock_ratio=0.8):
         just_entered = False
+            # 리밸런싱 조건
+            rebalance_day_counter += 1
+            if rebalance_day_counter >= rebalance_interval:
+                total_value = self.shares * price + self.cash
+                target_stock_value = total_value * rebalance_target_stock_ratio
+                current_stock_value = self.shares * price
+                if current_stock_value > target_stock_value * 1.05:
+                    excess_value = current_stock_value - target_stock_value
+                    self.sell(date, price, '리밸런싱 매도', excess_value / price)
+                elif current_stock_value < target_stock_value * 0.95 and self.cash > 0:
+                    needed_value = min(target_stock_value - current_stock_value, self.cash)
+                    self.buy(date, price, '리밸런싱 매수', needed_value, entry_peak, drawdown_from_entry_peak)
+                rebalance_day_counter = 0
+        rebalance_day_counter = 0
         current_week = None
         last_week_rsi = None
         peak_value = 0
@@ -243,6 +257,8 @@ if __name__ == '__main__':
     exit_recovery = st.number_input("고점 대비 상승률 (청산 조건) (%)", min_value=0, max_value=100, value=10, step=1)
     per_buy_amount = st.number_input("1회 매수 금액 (원)", value=100000, step=10000, format="%d")
     buy_interval = st.number_input("정기 매수 간격 (일)", min_value=1, max_value=30, value=5, step=1)
+    rebalance_interval = st.number_input("리밸런싱 간격 (일)", min_value=1, max_value=120, value=30, step=1)
+    rebalance_target_stock_ratio = st.slider("리밸런싱 목표 주식 비중 (%)", min_value=0, max_value=100, value=80, step=5) / 100", min_value=1, max_value=30, value=5, step=1)
 
     chart_start = st.date_input("차트 보기 시작일", pd.to_datetime("2021-01-01"))
     chart_end = st.date_input("차트 보기 종료일", pd.to_datetime("2024-12-31"))
@@ -263,7 +279,7 @@ if __name__ == '__main__':
             stop_buy_rally=stop_buy_rally,
             signal_ticker=signal_ticker
         )
-        result = sim.simulate()
+        result = sim.simulate(rebalance_interval=rebalance_interval, rebalance_target_stock_ratio=rebalance_target_stock_ratio)
 
         st.subheader("📌 시뮬레이션 결과")
         st.write(f"총 매수 금액: {result['총 매수 금액']:,} 원")
