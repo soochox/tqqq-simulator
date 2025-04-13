@@ -118,23 +118,10 @@ class TQQQSimulator:
                 self.buy(date, price, f'매수중지(고점 {self.stop_buy_rally}%)', 0, signal_peak, drawdown_from_entry_peak)
 
             if in_position and i % self.buy_interval == 0 and not just_entered:
-                 # 고점 상승률 초과 시 정기매수 중지
                 if signal_price >= entry_peak * (1 + self.stop_buy_rally / 100):
                     self.buy(date, price, f'매수중지(고점 {self.stop_buy_rally}%)', 0, entry_peak, drawdown_from_entry_peak)
                 else:
                     self.buy(date, price, '정기매수', self.per_buy_amount, entry_peak, drawdown_from_entry_peak)
-
-            # 추가매수 전략 (현재 주석 처리)
-            # if not np.isnan(rsi) and not np.isnan(dev):
-            #     amount = 0
-            #     if rsi < 30 and dev < -10:
-            #         amount = self.per_buy_amount
-            #     if rsi < 25 and dev < -15:
-            #         amount = self.per_buy_amount * 2
-            #     if rsi < 20 and dev < -20:
-            #         amount = self.per_buy_amount * 3
-            #     if in_position and amount > 0:
-            #         self.buy(date, price, '추가매수', amount, entry_peak, drawdown_from_entry_peak)
 
             portfolio_value = self.shares * price
             peak_value = max(peak_value, portfolio_value)
@@ -152,17 +139,21 @@ class TQQQSimulator:
             if self.cash <= 0:
                 self.cash_shortage_points.append(date)
             self.cumulative_shares.append({"Date": date, "Shares": self.shares})
-                        # 리밸런싱 조건
+
+            # 수정된 리밸런싱 조건
             if rebalance_day_counter >= rebalance_interval:
-                total_value = self.shares * price + self.cash
-                target_stock_value = total_value * rebalance_target_stock_ratio
-                current_stock_value = self.shares * price
-                if current_stock_value > target_stock_value * 1.05:
-                    excess_value = current_stock_value - target_stock_value
-                    self.sell(date, price, '리밸런싱 매도', excess_value / price)
-                elif current_stock_value < target_stock_value * 0.95 and self.cash > 0:
-                    needed_value = min(target_stock_value - current_stock_value, self.cash)
-                    self.buy(date, price, '리밸런싱 매수', needed_value, entry_peak, drawdown_from_entry_peak)
+                if self.shares > 0:
+                    total_value = self.shares * price + self.cash
+                    current_stock_value = self.shares * price
+                    current_stock_ratio = current_stock_value / total_value
+                     
+                    print(f"{date} - 주식비중: {round(current_stock_ratio * 100, 1)}% (목표: {rebalance_target_stock_ratio}%)")
+
+                    if current_stock_ratio > rebalance_target_stock_ratio/100:
+                        target_stock_value = total_value * rebalance_target_stock_ratio/100
+                        excess_value = current_stock_value - target_stock_value
+                        quantity_to_sell = excess_value / price
+                        self.sell(date, price, '리밸런싱 매도', quantity_to_sell)
                 rebalance_day_counter = 0
 
             just_entered = False
@@ -207,7 +198,7 @@ class TQQQSimulator:
             '매수중지': bool('중단' in action),
             '청산': bool('청산' in action),
             f"기준 주가({self.signal_ticker})": round(self.signal_df['Close'].loc[date], 1),
-            '진입 시점 고점': round(signal_peak, 1) if signal_peak is not None else np.nan,            
+            '진입 시점 고점': round(signal_peak, 1) if signal_peak is not None else np.nan,
             'Drawdown (%)': round(drawdown, 1) if drawdown is not None else '',
             'Total MDD (%)': round(mdd, 1)
         })
@@ -243,8 +234,6 @@ class TQQQSimulator:
         if peak == 0:
             return 0
         return (peak - current) / peak * 100
-
-
 
 if __name__ == '__main__':
     st.markdown("## 📊 TQQQ 전략 시뮬레이터")
