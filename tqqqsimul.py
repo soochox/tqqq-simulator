@@ -19,6 +19,7 @@ class TQQQSimulator:
         self.per_buy_amount = per_buy_amount
         self.buy_interval = buy_interval
         self.cash = initial_cash
+        self.initial_cash = initial_cash  # 최초 보유자산 저장
         self.shares = 0
         self.portfolio = []
         self.mdd_history = []
@@ -162,10 +163,11 @@ class TQQQSimulator:
         final_value = self.shares * final_price
         total_invested = sum(x['Amount'] for x in self.portfolio if x['Action'].startswith('정기매수') or x['Action'].startswith('추가매수'))
         return {
+            '최초 보유자산': self.initial_cash,  # 최초 보유자산 정확히 반영
             '총 매수 금액': total_invested,
             '보유 주식 수': self.shares,
             '최종 평가금액': final_value + self.cash,
-            '수익률(%)': round(100 * (1 - total_invested / (final_value + self.cash)), 2) if (final_value + self.cash) > 0 else 0,
+            '수익률(%)': round(100 * (final_value + self.cash - self.initial_cash) / self.initial_cash, 2),
             'MDD(%)': max([v['MDD'] for v in self.mdd_history]) if self.mdd_history else 0,
             '매수 기록': pd.DataFrame(self.portfolio),
             '자산 추이': pd.DataFrame(self.daily_value),
@@ -274,6 +276,7 @@ if __name__ == '__main__':
 
         st.subheader("📌 시뮬레이션 결과")
         st.write(f"총 매수 금액: {result['총 매수 금액']:,} 달러")
+        st.write(f"최초 보유자산: {result['최초 보유자산']:,} 달러")
         st.write(f"보유 주식 수: {result['보유 주식 수']:.0f} 주")
         st.write(f"최종 평가금액: {result['최종 평가금액']:.0f} 달러")
         st.write(f"수익률: {result['수익률(%)']:.2f}%")
