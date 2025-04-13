@@ -210,7 +210,8 @@ class TQQQSimulator:
             'Signal Peak': signal_peak if '진입' in action else None,
             'Drawdown (%)': drawdown if '진입' in action else None,
             '최고가': self.signal_max.iloc[-1] if '진입' in action else None,
-            'MDD(%)': self.get_current_mdd() if '진입' in action else None
+            'MDD(%)': self.get_current_mdd() if '진입' in action else None,
+            '고점 대비 변화율(%)': ((price - signal_peak) / signal_peak * 100) if '진입' in action and signal_peak else None
         })
 
         # 청산(매도) 실행 함수
